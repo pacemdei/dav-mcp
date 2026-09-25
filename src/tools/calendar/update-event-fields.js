@@ -2,7 +2,7 @@ import { tsdavManager } from '../../tsdav-client.js';
 import { validateInput, davFieldMapSchema, dateOrDateTime, refineDateRange, isDateOnly } from '../../validation.js';
 import { formatSuccess } from '../../formatters.js';
 import { z } from 'zod';
-import { updateFields } from 'tsdav-utils';
+import { updateFieldsWithLists } from '../shared/multi-value-fields.js';
 import { setEventDates } from '../shared/event-dates.js';
 
 /**
@@ -20,7 +20,7 @@ import { setEventDates } from '../shared/event-dates.js';
 const updateEventFieldsSchema = z.object({
   event_url: z.string().url('Event URL must be a valid URL'),
   event_etag: z.string().min(1, 'Event etag is required'),
-  fields: davFieldMapSchema,
+  fields: davMultiValueFieldMapSchema,
   start_date: dateOrDateTime.optional(),
   end_date: dateOrDateTime.optional(),
   all_day: z.boolean().optional(),
@@ -89,7 +89,7 @@ export const updateEventFields = {
         type: 'object',
         description: 'Fields to update, keyed by bare UPPERCASE property name (e.g., SUMMARY, LOCATION, STATUS). Any RFC 5545 property or custom X-* property is supported, EXCEPT the dates: use start_date/end_date/all_day for DTSTART, DTEND and DURATION. Property parameters such as "VALUE=DATE" are not accepted here, and values must not contain line breaks.',
         additionalProperties: {
-          type: 'string'
+          oneOf: [{ type: "string" }, { type: "array", items: { type: "string" } }]
         },
         properties: {
           SUMMARY: {
@@ -144,7 +144,7 @@ export const updateEventFields = {
 
     // Step 2: Update fields using tsdav-utils (field-agnostic)
     // Accepts any RFC 5545 property name (UPPERCASE)
-    let updatedData = updateFields(calendarObject, validated.fields || {});
+    let updatedData = updateFieldsWithLists(calendarObject, validated.fields || {});
 
     // Step 2b: dates go through the component API, not the fields map, because
     // an all-day value needs a VALUE=DATE parameter on the property

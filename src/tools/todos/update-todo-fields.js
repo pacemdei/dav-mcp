@@ -1,8 +1,8 @@
 import { tsdavManager } from '../../tsdav-client.js';
-import { validateInput, davFieldMapSchema } from '../../validation.js';
+import { validateInput, davMultiValueFieldMapSchema } from '../../validation.js';
 import { formatSuccess } from '../../formatters.js';
 import { z } from 'zod';
-import { updateFields } from 'tsdav-utils';
+import { updateFieldsWithLists } from '../shared/multi-value-fields.js';
 
 /**
  * Schema for field-based todo updates
@@ -13,7 +13,7 @@ import { updateFields } from 'tsdav-utils';
 const updateTodoFieldsSchema = z.object({
   todo_url: z.string().url('Todo URL must be a valid URL'),
   todo_etag: z.string().min(1, 'Todo etag is required'),
-  fields: davFieldMapSchema
+  fields: davMultiValueFieldMapSchema
 });
 
 /**
@@ -43,7 +43,7 @@ export const updateTodoFields = {
         type: 'object',
         description: 'Fields to update, keyed by bare UPPERCASE property name (e.g., SUMMARY, STATUS, PRIORITY). Any RFC 5545 VTODO property or custom X-* property is supported. Property parameters such as "DUE;VALUE=DATE" are not accepted here, and values must not contain line breaks.',
         additionalProperties: {
-          type: 'string'
+          oneOf: [{ type: "string" }, { type: "array", items: { type: "string" } }]
         },
         properties: {
           SUMMARY: {
@@ -94,7 +94,7 @@ export const updateTodoFields = {
 
     // Step 2: Update fields using tsdav-utils (field-agnostic)
     // Accepts any RFC 5545 VTODO property name (UPPERCASE)
-    const updatedData = updateFields(todoObject, validated.fields || {});
+    const updatedData = updateFieldsWithLists(todoObject, validated.fields || {});
 
     // Step 3: Send the updated todo back to server
     const updateResponse = await client.updateTodo({

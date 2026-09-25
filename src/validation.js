@@ -132,25 +132,44 @@ export function refineDateRange(data, ctx, { startKey, endKey }) {
 //     non-TEXT values verbatim, so values must stay on one line too
 const DAV_PROPERTY_NAME = /^[A-Za-z][A-Za-z0-9-]*$/;
 
-export const davFieldMapSchema = z.record(z.string(), z.string())
-  .superRefine((fields, ctx) => {
-    for (const [key, value] of Object.entries(fields)) {
-      if (!DAV_PROPERTY_NAME.test(key)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [key],
-          message: `"${key}" is not a bare property name. Use letters, digits and "-" only (e.g. SUMMARY, X-ZOOM-LINK); parameters such as ";VALUE=DATE" are not supported here`,
-        });
-      }
-      if (/[\r\n]/.test(value)) {
+function refineFieldMap(fields, ctx) {
+  for (const [key, value] of Object.entries(fields)) {
+    if (!DAV_PROPERTY_NAME.test(key)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [key],
+        message: `"${key}" is not a bare property name. Use letters, digits and "-" only (e.g. SUMMARY, X-ZOOM-LINK); parameters such as ";VALUE=DATE" are not supported here`,
+      });
+    }
+    const values = Array.isArray(value) ? value : [value];
+    for (const single of values) {
+      if (/[\r\n]/.test(single)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `value for "${key}" must not contain line breaks`,
         });
+        break;
       }
     }
-  })
+  }
+}
+
+export const davFieldMapSchema = z.record(z.string(), z.string())
+  .superRefine(refineFieldMap)
+  .optional();
+
+// Same as davFieldMapSchema, except a value may also be an ARRAY of strings.
+// List-valued RFC 5545 properties (CATEGORIES, RESOURCES, RELATED-TO) are
+// written as real lists by src/tools/shared/multi-value-fields.js, so they need
+// one value per list item instead of one escaped string. Used by the todo and
+// event field tools; contacts stay on the strict single-string schema because
+// tsdav-utils has no vCard equivalent.
+export const davMultiValueFieldMapSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.array(z.string())])
+)
+  .superRefine(refineFieldMap)
   .optional();
 
 // Helper: Optional URL that gracefully handles LLM placeholder values
